@@ -1,0 +1,8 @@
+{
+  "name": "DTEK Repository",
+  "url": "https://github.com/RainTomorow/ha-dtek",
+  "maintainer": "RainTomorow",
+  "addons": [
+    "addons/dtek_agent"
+  ]
+}

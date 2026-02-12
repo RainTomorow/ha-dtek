@@ -1,0 +1,9 @@
+DOMAIN = "dtek_shutdowns"
+CONF_REGION = "region"
+CONF_GROUP = "group"
+CONF_CITY = "city"
+CONF_STREET = "street"
+CONF_HOUSE = "house_number"
+CONF_AGENT_URL = "agent_url"
+CONF_GROUP_BY_ADDRESS = "by_address"
+GROUP_LIST = ["1.1", "1.2", "2.1", "2.2", "3.1", "3.2", "4.1", "4.2", "5.1", "5.2", "6.1", "6.2"]
