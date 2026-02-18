@@ -51,9 +51,18 @@ This integration works best when paired with the **DTEK Playwright Agent** Add-o
 
 > **Note on Refresh Rates:** Data refreshes approximately every 90 minutes to respect the DTEK servers and avoid IP bans.
 
+  
+## Known Issues
+1. Not sure what to do with houses that are on multiple connection lines
+2. Sometimes integration/addon need to be launched manually on system boot (maybe it's just my slow hardware)
+3. And I don't have the intention to figure it out any time soon
+
 ## Dashboard Card
 Recommended configuration for [ApexCharts Card](https://github.com/RomRider/apexcharts-card). 
 This configuration pushes time labels **below** the chart and staggers them into two rows (Outages on bottom, Connections on top) to prevent overlapping.
+
+<img width="464" height="521" alt="image" src="https://github.com/user-attachments/assets/2a9b3db4-c51a-4318-9997-a35e787dd29b" />
+
 
 ### Today
 ```yaml
