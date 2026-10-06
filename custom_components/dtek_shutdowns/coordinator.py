@@ -7,11 +7,11 @@ import time
 from datetime import timedelta, datetime
 from dataclasses import dataclass
 from typing import Optional
+from zoneinfo import ZoneInfo
 from curl_cffi import requests
 import cloudscraper
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.util import dt as dt_util
 from .const import (
     DOMAIN, CONF_REGION, CONF_GROUP, CONF_CITY, 
     CONF_STREET, CONF_HOUSE, CONF_AGENT_URL, CONF_GROUP_BY_ADDRESS
@@ -23,6 +23,11 @@ BASE_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "uk,en-US;q=0.9,en;q=0.8",
 }
+
+KYIV_TZ = ZoneInfo("Europe/Kyiv")
+
+def _norm_house(h):
+    return str(h).strip().lower().replace(" ", "").replace("/", "").replace("-", "").translate(str.maketrans("abekmohpctx", "абекмонрстх"))
 
 @dataclass
 class DtekState:
@@ -96,8 +101,12 @@ class DtekCoordinator(DataUpdateCoordinator[DtekState]):
         grp, pow_stat, out_type, ms, me = "Unknown", "Unknown", "Scheduled", "-", "-"
         
         if info:
-            if str(info.get("type", "0")) == "2" or "Екстренні" in str(info.get("sub_type", "")) or "Аварійне" in str(info.get("sub_type", "")):
+            if "Стабілізаційн" in str(info.get("sub_type", "")):
+                ms, me, pow_stat = info.get("start_date") or "-", info.get("end_date") or "-", "Off"
+            elif str(info.get("type", "0")) == "2" or "Екстренні" in str(info.get("sub_type", "")) or "Аварійне" in str(info.get("sub_type", "")):
                 out_type, ms, me, pow_stat = "Emergency", info.get("start_date", "-"), info.get("end_date", "-"), "Off"
+            elif str(info.get("type", "0")) == "1":
+                out_type, ms, me, pow_stat = "Planned", info.get("start_date", "-"), info.get("end_date", "-"), "Off"
             else:
                 pow_stat = "On"
             reasons = info.get("sub_type_reason", [])
@@ -108,7 +117,7 @@ class DtekCoordinator(DataUpdateCoordinator[DtekState]):
 
         sched, out, conn = [], [], []
         if raw_sched and grp != "Unknown":
-            dc = raw_sched.get('data', {})
+            dc = raw_sched.get('data') or {}
             tk = grp
             first_val = next(iter(dc.values())) if dc else {}
             if tk not in first_val:
@@ -119,15 +128,15 @@ class DtekCoordinator(DataUpdateCoordinator[DtekState]):
             for ts in sorted_ts:
                 gd = dc.get(str(ts), {}).get(tk, {})
                 if not gd: continue
-                bd = dt_util.as_local(dt_util.utc_from_timestamp(ts))
+                bd = datetime.fromtimestamp(ts, KYIV_TZ)
                 for h in range(1, 25):
                     v = gd.get(str(h), "yes")
-                    v1, v2 = (1, 1) if v=="no" else (0, 1) if v=="second" else (1, 0) if v=="first" else (1, 1) if v=="maybe" else (0, 0)
+                    v1, v2 = (1, 1) if v in ("no", "maybe") else (0, 1) if v in ("second", "msecond") else (1, 0) if v in ("first", "mfirst") else (0, 0)
                     sched.append({"start": bd.replace(hour=h-1, minute=0).isoformat(), "value": v1})
                     sched.append({"start": bd.replace(hour=h-1, minute=30).isoformat(), "value": v2})
 
             now = datetime.now().astimezone()
-            if out_type == "Scheduled":
+            if out_type == "Scheduled" and ms == "-":
                 for b in sched:
                     if datetime.fromisoformat(b["start"]) > now:
                         idx = sched.index(b) - 1
@@ -244,7 +253,7 @@ class DtekCoordinator(DataUpdateCoordinator[DtekState]):
         return self._execute_fetch_with_session(session, "curl_cffi", csrf)
 
     def _extract_csrf(self, text):
-        match = re.search(r'<meta name="csrf-token" content="([^"]+)">', text)
+        match = re.search(r'<meta[^>]*name=["\']csrf-token["\'][^>]*content=["\']([^"\']+)["\']', text)
         return match.group(1) if match else None
 
     def _execute_fetch_with_session(self, session, session_type, csrf_token=None) -> DtekState:
@@ -296,7 +305,7 @@ class DtekCoordinator(DataUpdateCoordinator[DtekState]):
                     house_info = data.get(house)
                     if not house_info:
                         for k, v in data.items():
-                            if k.lower() == str(house).lower(): house_info = v; break
+                            if _norm_house(k) == _norm_house(house): house_info = v; break
                     
                     if house_info:
                         reasons = house_info.get("sub_type_reason", [])
@@ -310,8 +319,17 @@ class DtekCoordinator(DataUpdateCoordinator[DtekState]):
         if house_info:
             htype = str(house_info.get("type", "0"))
             stype = str(house_info.get("sub_type", ""))
-            if htype == "2" or "Екстренні" in stype or "Аварійне" in stype:
+            if "Стабілізаційн" in stype:
+                msg_start = house_info.get("start_date") or "-"
+                msg_end = house_info.get("end_date") or "-"
+                current_power = "Off"
+            elif htype == "2" or "Екстренні" in stype or "Аварійне" in stype:
                 outage_type = "Emergency"
+                msg_start = house_info.get("start_date", "-")
+                msg_end = house_info.get("end_date", "-")
+                current_power = "Off"
+            elif htype == "1":
+                outage_type = "Planned"
                 msg_start = house_info.get("start_date", "-")
                 msg_end = house_info.get("end_date", "-")
                 current_power = "Off"
@@ -328,7 +346,7 @@ class DtekCoordinator(DataUpdateCoordinator[DtekState]):
              except: raw_schedule_json = {}
 
         if raw_schedule_json and current_group != "Unknown":
-            data = raw_schedule_json.get('data', {})
+            data = raw_schedule_json.get('data') or {}
             tk = current_group
             first = next(iter(data.values())) if data else {}
             if tk not in first:
@@ -338,15 +356,15 @@ class DtekCoordinator(DataUpdateCoordinator[DtekState]):
             for ts in sorted([int(k) for k in data.keys()]):
                 day_data = data.get(str(ts), {}).get(tk, {})
                 if not day_data: continue
-                bd = dt_util.as_local(dt_util.utc_from_timestamp(ts))
+                bd = datetime.fromtimestamp(ts, KYIV_TZ)
                 for h in range(1, 25):
                     v = day_data.get(str(h), "yes")
-                    v1, v2 = (1, 1) if v=="no" else (0, 1) if v=="second" else (1, 0) if v=="first" else (1, 1) if v=="maybe" else (0, 0)
+                    v1, v2 = (1, 1) if v in ("no", "maybe") else (0, 1) if v in ("second", "msecond") else (1, 0) if v in ("first", "mfirst") else (0, 0)
                     schedule.append({"start": bd.replace(hour=h-1, minute=0).isoformat(), "value": v1})
                     schedule.append({"start": bd.replace(hour=h-1, minute=30).isoformat(), "value": v2})
             
             now = datetime.now().astimezone()
-            if outage_type == "Scheduled":
+            if outage_type == "Scheduled" and msg_start == "-":
                 for b in schedule:
                     if datetime.fromisoformat(b["start"]) > now:
                         idx = schedule.index(b) - 1

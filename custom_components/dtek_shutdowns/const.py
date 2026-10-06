@@ -6,4 +6,4 @@ CONF_STREET = "street"
 CONF_HOUSE = "house_number"
 CONF_AGENT_URL = "agent_url"
 CONF_GROUP_BY_ADDRESS = "by_address"
-GROUP_LIST = ["1.1", "1.2", "2.1", "2.2", "3.1", "3.2", "4.1", "4.2", "5.1", "5.2", "6.1", "6.2"]
+GROUP_LIST = [f"{q}.{s}" for q in [*range(1, 61), *range(1001, 1007)] for s in (1, 2)]

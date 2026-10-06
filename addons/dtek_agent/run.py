@@ -9,6 +9,9 @@ def force_cleanup():
     except:
         pass
 
+def norm_house(h):
+    return str(h).strip().lower().replace(" ", "").replace("/", "").replace("-", "").translate(str.maketrans("abekmohpctx", "абекмонрстх"))
+
 async def fetch_dtek(request):
     try:
         data = await request.json()
@@ -35,12 +38,12 @@ async def fetch_dtek(request):
                     "--window-position=0,0",
                     "--ignore-certificate-errors",
                     "--disable-extensions",
-                    "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+                    "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
                 ]
             )
             
             ctx = await browser.new_context(
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
                 viewport={'width': 1920, 'height': 1080},
                 locale='uk-UA',
                 timezone_id='Europe/Kiev'
@@ -120,7 +123,7 @@ async def fetch_dtek(request):
                     
                     if not house_info:
                         for k, v in d_block.items():
-                            if str(house).lower() in k.lower():
+                            if norm_house(k) == norm_house(house):
                                 house_info = v
                                 break
                     

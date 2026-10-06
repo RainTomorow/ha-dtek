@@ -4,7 +4,7 @@
   "codeowners": [],
   "config_flow": true,
   "documentation": "https://github.com/RainTomorow/ha-dtek",
-  "requirements": [],
+  "requirements": ["cloudscraper", "curl_cffi"],
   "iot_class": "local_polling",
-  "version": "2.0.0"
+  "version": "2.1.0"
 }
